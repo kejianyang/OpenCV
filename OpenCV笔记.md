@@ -3559,9 +3559,113 @@ void CustomShiTomasi_Demo(int, void*) {
 
 
 
+```c++
+#include<opencv2/opencv.hpp>
+#include<math.h>
+#include<iostream>
+using namespace std;
+using namespace cv;
+
+Mat src, gray_src;
+char input_win[] = "input image";
+const char output_win[] = "output image";
+int max_corners = 30;
+int max_count = 50;
+void SubPixel_Demo(int, void*);
+int main(int argc, char** argv)
+{
+
+	src = imread("D:/Visual Studio/workspace/image/home.jpg");
+	if (src.empty())
+	{
+		printf("can not load image");
+		return -1;
+	}
+
+	namedWindow(input_win, CV_WINDOW_AUTOSIZE);
+	imshow(input_win, src);
+	namedWindow(output_win, CV_WINDOW_AUTOSIZE);
+	cvtColor(src, gray_src, CV_BGR2GRAY);
+	//imshow("gray src", gray_src);
+	createTrackbar("coeners",output_win,&max_corners,max_count, SubPixel_Demo);
+	SubPixel_Demo(0, 0);
+
+	waitKey(0);
+	return 0;
+}
+void SubPixel_Demo(int, void*) {
+	if (max_corners<5)
+	{
+		max_corners = 5;
+	}
+	vector<Point2f> corners;
+	double qualityLevel = 0.01;
+	double minDistance = 10;
+	int blockSize = 3;
+	double k = 0.04;
+	goodFeaturesToTrack(gray_src, corners, max_corners, qualityLevel, minDistance, Mat(), blockSize, false, k);
+	cout << "number of corners" << corners.size() << endl;
+	Mat resultImg = src.clone();
+	for (size_t i = 0; i < corners.size(); i++)
+	{
+		circle(resultImg, corners[i], 2, Scalar(0, 0, 255), 2, 8, 0);
+	}
+	imshow(output_win, resultImg);
+	Size winsize = Size(5, 5);
+	Size zerozone = Size(-1, -1);
+	TermCriteria tc = TermCriteria(TermCriteria::EPS + TermCriteria::MAX_ITER, 40, 0.001);
+	cornerSubPix(gray_src, corners, winsize, zerozone, tc);
+	for (size_t i = 0; i < corners.size(); i++)
+	{
+		cout << (i + 1) << " . point[x,y]= " << corners[i].x << " , " << corners[i].y << endl;
+
+	}
+	return;
+}
 ```
 
-```
+### 7SURF特征检测
+
+#### 1SURF特征检测介绍
+
+##### SURF(Speeded Up Robust Features)特征关键特性：
+
+-特征检测
+-尺度空间
+-选择不变性
+-特征向量
+
+##### 工作原理
+
+1.选择图像中POI（Points of Interest） Hessian Matrix
+
+2.在不同的尺度空间发现关键点，非最大信号压制
+
+3.发现特征点方法、旋转不变性要求
+
+4.生成特征向量
+
+![1556508122949](OpenCV笔记.assets/1556508122949.png)
+
+
+
+![1556508157665](OpenCV笔记.assets/1556508157665.png)
+
+![1556508174556](OpenCV笔记.assets/1556508174556.png)
+
+
+
+![1556508190583](OpenCV笔记.assets/1556508190583.png)
+
+
+
+![1556508206975](OpenCV笔记.assets/1556508206975.png)
+
+![1556508255466](OpenCV笔记.assets/1556508255466.png)
+
+
+
+
 
 
 
