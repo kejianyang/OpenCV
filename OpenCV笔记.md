@@ -3266,3 +3266,311 @@ Detection  Description  Matching
 
 2 从cmake官网下载cmake  <https://cmake.org/download/>
 
+3 按照“一安装及配置”配置编译路径
+
+**注意 ：配置链接器时需要将所有的lib文件加入**
+
+进入到vc16文件夹 下的lib文件夹  在cmd窗口执行  dir /b *.lib >0.txt
+
+### 3Harris角点检测
+
+#### 1Harris角点检测理论
+
+![1556269537398](OpenCV笔记.assets/1556269537398.png)
+
+![1556269550915](OpenCV笔记.assets/1556269550915.png)
+
+![1556269571113](OpenCV笔记.assets/1556269571113.png)
+
+![1556269593555](OpenCV笔记.assets/1556269593555.png)
+
+![1556269611520](OpenCV笔记.assets/1556269611520.png)
+
+#### 2参数说明
+
+![1556270943516](OpenCV笔记.assets/1556270943516.png)
+
+```c++
+#include<opencv2/opencv.hpp>
+#include<math.h>
+#include<iostream>
+using namespace std;
+using namespace cv;
+Mat src, gray_src;
+int thres = 130;
+int max_count = 255;
+void Harris_Demo(int,void*);
+char input_win[] = "input image";
+const char output_win[] = "output image";
+int main(int argc, char** argv)
+{
+	src = imread("D:/Visual Studio/workspace/image/cards.JPG");
+	if (src.empty())
+	{
+		printf("can not load image");
+		return -1;
+	}
+	namedWindow(input_win,CV_WINDOW_AUTOSIZE);
+	imshow(input_win, src);
+	namedWindow(output_win, CV_WINDOW_AUTOSIZE);
+	cvtColor(src, gray_src, CV_BGR2GRAY);
+	imshow("gray src", gray_src);
+	createTrackbar("threshold:", output_win, &thres, max_count, Harris_Demo);
+	Harris_Demo(0, 0);
+	waitKey(0);
+	return 0;
+}
+void Harris_Demo(int, void*)
+{
+	Mat dst;
+	dst = Mat::zeros(gray_src.size(), CV_32FC1);
+	int blocksize = 2;
+	int ksize = 3;
+	double k = 0.04;
+	cornerHarris(gray_src, dst, blocksize, ksize, k, BORDER_DEFAULT);
+	Mat nom_dst;
+	normalize(dst, nom_dst, 0, 255, NORM_MINMAX, CV_32FC1, Mat());
+	Mat nomscaledst;
+	convertScaleAbs(nom_dst, nomscaledst);
+	Mat resultimg = src.clone();
+	for (int row = 0; row < resultimg.rows; row++)
+	{
+		uchar* currentRow = nomscaledst.ptr(row);
+		for (int col = 0; col < resultimg.cols; col++)
+		{
+			int value = (int)*currentRow;
+			if (value > thres)
+			{
+				circle(resultimg, Point(row, col), 2, Scalar(0, 0, 255), 2, 8, 0);
+
+			}
+			currentRow++;
+		}
+	}
+	imshow(output_win, resultimg);
+}
+
+
+
+```
+
+### 4Shi-Tomasi角点检测
+
+#### 1Shi-Tomasi角点检测理论
+
+![1556373830271](OpenCV笔记.assets/1556373830271.png)
+
+![1556373872411](OpenCV笔记.assets/1556373872411.png)
+
+#### 2参数说明
+
+![1556374066822](OpenCV笔记.assets/1556374066822.png)
+
+```C++
+#include<opencv2/opencv.hpp>
+#include<math.h>
+#include<iostream>
+using namespace std;
+using namespace cv;
+
+Mat src, gray_src;
+char input_win[] = "input image";
+const char output_win[] = "output image";
+int num_conners = 25;
+int max_conners = 200;
+void ShiTomasi_Demo(int, void*);
+RNG rng(12345);
+int main(int argc, char** argv)
+{
+	
+	src = imread("D:/Visual Studio/workspace/image/home.jpg");
+	if (src.empty())
+	{
+		printf("can not load image");
+		return -1;
+	}
+	namedWindow(input_win, CV_WINDOW_AUTOSIZE);
+	imshow(input_win, src);
+	namedWindow(output_win, CV_WINDOW_AUTOSIZE);
+	cvtColor(src, gray_src, CV_BGR2GRAY);
+	//imshow("gray src", gray_src);
+	createTrackbar("numm corners", output_win, &num_conners, max_conners, ShiTomasi_Demo);
+	ShiTomasi_Demo(0, 0);
+
+	
+
+	waitKey(0);
+	return 0;
+}
+
+void ShiTomasi_Demo(int, void*)
+{
+	if (num_conners<5)
+	{
+		num_conners = 5;
+	}
+	vector<Point2f> corners;
+	double qualityLevel = 0.01;
+	double minDistance = 10;
+	int blockSize = 3;
+	bool useHarris = false;
+	double k = 0.04;
+	Mat resultImg = gray_src.clone();
+	goodFeaturesToTrack(gray_src, corners, num_conners, qualityLevel, minDistance, Mat(), blockSize, useHarris, k);
+	printf("num %d\n", corners.size());
+	cvtColor(resultImg, resultImg, COLOR_GRAY2BGR);
+	for (size_t i = 0; i < corners.size(); i++)
+	{
+		circle(resultImg, corners[i], 2, Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255)),2,8,0);
+	}
+	imshow(output_win, resultImg);
+}
+```
+
+### 5自定义角点检测器
+
+#### 1自定义角点检测器
+
+##### 基于Harris与Shi-Tomasi角点检测
+
+-首先通过计算矩阵M得到 λ1λ2两个特征值根据他们得到角点响应值
+
+然后自己设置阈值实现计算出阈值得到有效响应值的角点位置
+
+#### 2相关API
+
+![1556440840336](OpenCV笔记.assets/1556440840336.png)
+
+```c++
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+#include <math.h>
+using namespace cv;
+using namespace std;
+const char* harris_win = "Custom Harris Corners Detector";
+const char* shitomasi_win = "Custom Shi-Tomasi Corners Detector";
+Mat src, gray_src;
+// harris corner response
+Mat harris_dst, harrisRspImg;
+double harris_min_rsp;
+double harris_max_rsp;
+// shi-tomasi corner response
+Mat shiTomasiRsp;
+double shitomasi_max_rsp;
+double shitomasi_min_rsp;
+int sm_qualitylevel = 30;
+// quality level
+int qualityLevel = 30;
+int max_count = 100;
+void CustomHarris_Demo(int, void*);
+void CustomShiTomasi_Demo(int, void*);
+int main(int argc, char** argv) {
+	src = imread("D:/vcprojects/images/home.jpg");
+	if (src.empty()) {
+		printf("could not load image...\n");
+		return -1;
+	}
+	namedWindow("input image", CV_WINDOW_AUTOSIZE);
+	imshow("input image", src);
+	cvtColor(src, gray_src, COLOR_BGR2GRAY);
+	// 计算特征值
+	int blockSize = 3;
+	int ksize = 3;
+	double k = 0.04;
+	harris_dst = Mat::zeros(src.size(), CV_32FC(6));
+	harrisRspImg = Mat::zeros(src.size(), CV_32FC1);
+	cornerEigenValsAndVecs(gray_src, harris_dst, blockSize, ksize, 4);
+	// 计算响应
+	for (int row = 0; row < harris_dst.rows; row++) {
+		for (int col = 0; col < harris_dst.cols; col++) {
+			double lambda1 =harris_dst.at<Vec6f>(row, col)[0];
+			double lambda2 = harris_dst.at<Vec6f>(row, col)[1];
+			harrisRspImg.at<float>(row, col) = lambda1*lambda2 - k*pow((lambda1 + lambda2), 2);
+		}
+	}
+	minMaxLoc(harrisRspImg, &harris_min_rsp, &harris_max_rsp, 0, 0, Mat());
+	namedWindow(harris_win, CV_WINDOW_AUTOSIZE);
+	createTrackbar("Quality Value:", harris_win, &qualityLevel, max_count, CustomHarris_Demo);
+	CustomHarris_Demo(0, 0);
+
+	// 计算最小特征值
+	shiTomasiRsp = Mat::zeros(src.size(), CV_32FC1);
+	cornerMinEigenVal(gray_src, shiTomasiRsp, blockSize, ksize, 4);
+	minMaxLoc(shiTomasiRsp, &shitomasi_min_rsp, &shitomasi_max_rsp, 0, 0, Mat());
+	namedWindow(shitomasi_win, CV_WINDOW_AUTOSIZE);
+	createTrackbar("Quality:", shitomasi_win, &sm_qualitylevel, max_count, CustomShiTomasi_Demo);
+	CustomShiTomasi_Demo(0, 0);
+
+	waitKey(0);
+	return 0;
+}
+
+void CustomHarris_Demo(int, void*) {
+	if (qualityLevel < 10) {
+		qualityLevel = 10;
+	}
+	Mat resultImg = src.clone();
+	float t = harris_min_rsp + (((double)qualityLevel) / max_count)*(harris_max_rsp - harris_min_rsp);
+	for (int row = 0; row < src.rows; row++) {
+		for (int col = 0; col < src.cols; col++) {
+			float v = harrisRspImg.at<float>(row, col);
+			if (v > t) {
+				circle(resultImg, Point(col, row), 2, Scalar(0, 0, 255), 2, 8, 0);
+			}
+		}
+	}
+
+	imshow(harris_win, resultImg);
+}
+
+void CustomShiTomasi_Demo(int, void*) {
+	if (sm_qualitylevel < 20) {
+		sm_qualitylevel = 20;
+	}
+
+	Mat resultImg = src.clone();
+	float t = shitomasi_min_rsp + (((double)sm_qualitylevel) / max_count)*(shitomasi_max_rsp - shitomasi_min_rsp);
+	for (int row = 0; row < src.rows; row++) {
+		for (int col = 0; col < src.cols; col++) {
+			float v = shiTomasiRsp.at<float>(row, col);
+			if (v > t) {
+				circle(resultImg, Point(col, row), 2, Scalar(0, 0, 255), 2, 8, 0);
+			}
+		}
+	}
+	imshow(shitomasi_win, resultImg);
+}
+```
+
+### 6亚像素级别角点检测
+
+#### 1提高检测精度
+
+理论与现实总是不一致的，实际情况下几乎所有的角点不会是一个真正的准确像素点。(100, 5) 实际（100.234， 5.789）
+
+#### 2亚像素定位
+
+插值方法
+基于图像矩计算
+曲线拟合方法 -（高斯曲面、多项式、椭圆曲面）
+
+![1556441290430](OpenCV笔记.assets/1556441290430.png)
+
+
+
+```
+
+```
+
+
+
+### 三级联分类器
+
+#### 1.Harr与LBP级联分类器的原理介绍
+
+##### 1Haar特征与LBP特征
+
+##### 2级联分类器原理
+
+##### 3OpenCV中级联分类器使用-CascadeClassifier
