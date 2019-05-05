@@ -3663,6 +3663,430 @@ void SubPixel_Demo(int, void*) {
 
 ![1556508255466](OpenCV笔记.assets/1556508255466.png)
 
+```c++
+//类SURF中成员函数create()参数说明：
+
+static Ptr<SURF> create(
+double hessianThreshold=100,//SURF中使用的hessian关键点检测器的阈值
+int nOctaves = 4, //关键点检测器将使用的金字塔组数量
+int nOctaveLayers = 3,//高斯金字塔每个组内图像的层数
+bool extended = false, //扩展描述符标志（true使用扩展的128个元素的描述符，false使用64个元素的描述符）
+bool upright = false//旋转的特征标志（true不计算方向，false计算方向）
+);
+
+//函数detect()用来检测图像或图像集中的关键点。 
+//基类Feature2D中成员函数detect()参数说明：
+
+void detect( 
+InputArray image,//图像
+CV_OUT std::vector<KeyPoint>& keypoints,//检测到的关键点,（在图像集中关键点[i]是在图像[i]中检测到的一组关键点）
+InputArray mask=noArray() //指定在哪里寻找关键点的掩码（必须是在感兴趣区域中具有非零值的8位整数矩阵）
+);
+//函数drawKeypoints()的参数说明：
+void drawKeypoints( 
+InputArray image, //源图像
+const std::vector<KeyPoint>& keypoints, //来自源图像的关键点
+InputOutputArray outImage,//输出图像
+const Scalar& color=Scalar::all(-1), //关键点的颜色
+int flags=DrawMatchesFlags::DEFAULT //设置绘图功能的标志
+);
+
+//函数drawKeypoints()用来绘制关键点。
+
+```
+
+```c++
+#include<opencv2/opencv.hpp>
+#include<opencv2/xfeatures2d.hpp>
+#include<math.h>
+#include<iostream>
+using namespace std;
+using namespace cv;
+using namespace cv::xfeatures2d;
+Mat src, gray_src;
+char input_win[] = "input image";
+const char output_win[] = "output image";
+
+int main(int argc, char** argv)
+{
+
+	src = imread("D:/Visual Studio/workspace/image/dxy02.jpg",IMREAD_GRAYSCALE);
+	if (src.empty())
+	{
+		printf("can not load image");
+		return -1;
+	}
+
+	namedWindow(input_win, CV_WINDOW_AUTOSIZE);
+	imshow(input_win, src);
+	namedWindow(output_win, CV_WINDOW_AUTOSIZE);
+	int minHessian = 400;
+	Ptr<SURF> detector = SURF::create(minHessian);
+	vector<KeyPoint> keypoints;
+	detector->detect(src, keypoints, Mat());
+	Mat keypoint_img;
+	drawKeypoints(src, keypoints, keypoint_img, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
+	imshow(output_win, keypoint_img);
+	waitKey(0);
+	return 0;
+}
+
+```
+
+### 8SIFT特征检测
+
+#### 1SIFT特征检测介绍
+
+##### SIFT(Scale-Invariant Feature Transform)特征检测关键特性：
+
+###### 建立尺度空间，寻找极值
+
+工作原理
+构建图像高斯金字塔，求取DOG，发现最大与最小值在每一级
+构建的高斯金字塔，每一层根据sigma的值不同，可以分为几个等级，最少有4个。
+
+![1556528764841](OpenCV笔记.assets/1556528764841.png)
+
+![1556528793164](OpenCV笔记.assets/1556528793164.png)
+
+###### 关键点定位(寻找关键点准确位置与删除弱边缘)
+
+我们在像素级别获得了极值点的位置，但是更准确的值应该在亚像素位置，如何得到– 这个过程称为关键点(准确/精准)定位。
+删除弱边缘- 通过Hassian  矩阵特征值实现，小于阈值自动舍弃
+
+![1556528846327](OpenCV笔记.assets/1556528846327.png)
+
+![1556528869196](OpenCV笔记.assets/1556528869196.png)
+
+###### 关键点方向指定
+
+求得每一层对应图像的梯度，根据给定的窗口大小
+计算每个高斯权重，sigma=scalex1.5, 0~360之间建立36个直方图Bins
+找最高峰对应的Bin， 大于max*80% 的都保留
+这样就实现了旋转不变性，提高了匹配时候的稳定性。
+大约有15%的关键点会有多个方向。
+
+![1556528966872](OpenCV笔记.assets/1556528966872.png)
+
+###### 关键点描述子
+
+拟合多项式插值寻找最大Peak
+ 得到描述子= 4x4x8=128
+
+##### ![1556528997133](OpenCV笔记.assets/1556528997133.png)
+
+#### 2相关API
+
+![1556529041605](OpenCV笔记.assets/1556529041605.png)
+
+
+
+```c++
+#include <opencv2/opencv.hpp>
+#include <opencv2/xfeatures2d.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+using namespace cv::xfeatures2d;
+
+int main(int argc, char** argv) {
+	Mat src = imread("D:/vcprojects/images/test.png", IMREAD_GRAYSCALE);
+	if (src.empty()) {
+		printf("could not load image...\n");
+		return -1;
+	}
+	namedWindow("input image", CV_WINDOW_AUTOSIZE);
+	imshow("input image", src);
+
+	int numFeatures = 400;
+	Ptr<SIFT> detector = SIFT::create(numFeatures);
+	vector<KeyPoint> keypoints;
+	detector->detect(src, keypoints, Mat());
+	printf("Total KeyPoints : %d\n", keypoints.size());
+
+	Mat keypoint_img;
+	drawKeypoints(src, keypoints, keypoint_img, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
+	namedWindow("SIFT KeyPoints", CV_WINDOW_AUTOSIZE);
+	imshow("SIFT KeyPoints", keypoint_img);
+
+	waitKey(0);
+	return 0;
+}
+```
+
+### 9HOG特征检测
+
+#### 1HOG特征描述子提取
+
+灰度图像转换
+梯度计算
+分网格的梯度方向直方图
+块描述子
+块描述子归一化
+特征数据与检测窗口
+匹配方法
+
+#### 2分网格的梯度方向直方图
+
+![1556761942699](OpenCV笔记.assets/1556761942699.png)
+
+#### 3块描述子
+
+块描述子R-HOG
+将2x2的网格单元组合成为一个大的块(Block)对每个块之间有1/2部分是重叠区域
+
+主要是将每个Cell的直方图合并为一个大的直方图（Bin索引不变[0~9]之间）
+
+#### 4块描述子归一化
+
+![1556762086903](OpenCV笔记.assets/1556762086903.png)
+
+
+
+
+
+#### 5特征数据与检测窗口
+
+最终获得HOG描述算子(特征数据)
+需要正向训练200个左右的特征样本
+反向训练600~800个左右的特征样本
+初步测试、开窗检测
+举例：
+对于64x128的像素块，可以分为8x16个Cell分为7x15个块(R-HOG)
+总计的直方图向量数为：7x15x2x2x9 = 3780个向量数组
+
+```c++
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+
+int main(int argc, char** argv) {
+	Mat src = imread("D:/vcprojects/images/HOGV.png");
+	if (src.empty()) {
+		printf("could not load image...\n");
+		return -1;
+	}
+	namedWindow("input image", CV_WINDOW_AUTOSIZE);
+	imshow("input image", src);
+
+	/*Mat dst, dst_gray;
+	resize(src, dst, Size(64, 128));
+	cvtColor(dst, dst_gray, COLOR_BGR2GRAY);
+	HOGDescriptor detector(Size(64, 128), Size(16, 16), Size(8, 8), Size(8, 8), 9);
+
+	vector<float> descriptors;
+	vector<Point> locations;
+	detector.compute(dst_gray, descriptors, Size(0, 0), Size(0, 0), locations);
+	printf("number of HOG descriptors : %d", descriptors.size());
+	*/
+	HOGDescriptor hog = HOGDescriptor();
+	hog.setSVMDetector(hog.getDefaultPeopleDetector());
+
+	vector<Rect> foundLocations;
+	hog.detectMultiScale(src, foundLocations, 0, Size(8, 8), Size(32, 32), 1.05, 2);
+	Mat result = src.clone();
+	for (size_t t = 0; t < foundLocations.size(); t++) {
+		rectangle(result, foundLocations[t], Scalar(0, 0, 255), 2, 8, 0);
+	}
+	namedWindow("HOG SVM Detector Demo", CV_WINDOW_AUTOSIZE);
+	imshow("HOG SVM Detector Demo", result);
+
+	waitKey(0);
+	return 0;
+}
+```
+
+### 10LBP(Local Binary Patterns)特征
+
+#### 1LBP特征介绍
+
+![1556762210739](OpenCV笔记.assets/1556762210739.png)
+
+#### 2LBP表达
+
+![1556762244677](OpenCV笔记.assets/1556762244677.png)
+
+#### 3LBP扩展与多尺度表达
+
+![1556762280539](OpenCV笔记.assets/1556762280539.png)
+
+#### 4LBP统一模式
+
+![1556762309649](OpenCV笔记.assets/1556762309649.png)
+
+![1556762320675](OpenCV笔记.assets/1556762320675.png)
+
+```c++
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include "math.h"
+
+using namespace cv;
+using namespace std;
+
+Mat src, gray_src;
+int current_radius = 3;
+int max_count = 20;
+void ELBP_Demo(int, void*);
+int main(int argc, char** argv) {
+	src = imread("D:/vcprojects/images/test.png");
+	if (src.empty()) {
+		printf("could not load image...\n");
+		return -1;
+	}
+	const char* output_tt = "LBP Result";
+	namedWindow("input image", CV_WINDOW_AUTOSIZE);
+	namedWindow(output_tt, CV_WINDOW_AUTOSIZE);
+	imshow("input image", src);
+
+	// convert to gray
+	cvtColor(src, gray_src, COLOR_BGR2GRAY);
+	int width = gray_src.cols;
+	int height = gray_src.rows;
+
+	// »ù±¾LBPÑÝÊ¾
+	Mat lbpImage = Mat::zeros(gray_src.rows - 2, gray_src.cols - 2, CV_8UC1);
+	for (int row = 1; row < height - 1; row++) {
+		for (int col = 1; col < width - 1; col++) {
+			uchar c = gray_src.at<uchar>(row, col);
+			uchar code = 0;
+			code |= (gray_src.at<uchar>(row - 1, col - 1) > c) << 7;
+			code |= (gray_src.at<uchar>(row - 1, col) > c) << 6;
+			code |= (gray_src.at<uchar>(row - 1, col + 1) > c) << 5;
+			code |= (gray_src.at<uchar>(row, col + 1) > c) << 4;
+			code |= (gray_src.at<uchar>(row + 1, col + 1) > c) << 3;
+			code |= (gray_src.at<uchar>(row + 1, col) > c) << 2;
+			code |= (gray_src.at<uchar>(row + 1, col - 1) > c) << 1;
+			code |= (gray_src.at<uchar>(row, col - 1) > c) << 0;
+			lbpImage.at<uchar>(row - 1, col - 1) = code;
+		}
+	}
+	imshow(output_tt, lbpImage);
+
+	// ELBP ÑÝÊ¾
+	namedWindow("ELBP Result", CV_WINDOW_AUTOSIZE);
+	createTrackbar("ELBP Radius:", "ELBP Result", &current_radius, max_count, ELBP_Demo);
+	ELBP_Demo(0, 0);
+
+	waitKey(0);
+	return 0;
+}
+
+void ELBP_Demo(int, void*) {
+	int offset = current_radius * 2;
+	Mat elbpImage = Mat::zeros(gray_src.rows - offset, gray_src.cols - offset, CV_8UC1);
+	int width = gray_src.cols;
+	int height = gray_src.rows;
+
+	int numNeighbors = 8;
+	for (int n = 0; n < numNeighbors; n++) {
+		float x = static_cast<float>(current_radius) * cos(2.0 * CV_PI*n / static_cast<float>(numNeighbors));
+		float y = static_cast<float>(current_radius) * -sin(2.0 * CV_PI*n / static_cast<float>(numNeighbors));
+
+		int fx = static_cast<int>(floor(x));
+		int fy = static_cast<int>(floor(y));
+		int cx = static_cast<int>(ceil(x));
+		int cy = static_cast<int>(ceil(y));
+
+		float ty = y - fy;
+		float tx = x - fx;
+
+		float w1 = (1 - tx)*(1 - ty);
+		float w2 = tx*(1 - ty);
+		float w3 = (1 - tx)* ty;
+		float w4 = tx*ty;
+
+		for (int row = current_radius; row < (height - current_radius); row++) {
+			for (int col = current_radius; col < (width - current_radius); col++) {
+				float t = w1* gray_src.at<uchar>(row + fy, col + fx) + w2* gray_src.at<uchar>(row + fy, col + cx) +
+					w3* gray_src.at<uchar>(row + cy, col + fx) + w4* gray_src.at<uchar>(row + cy, col + cx);
+				elbpImage.at<uchar>(row- current_radius, col- current_radius) +=
+					((t > gray_src.at<uchar>(row, col)) && (abs(t - gray_src.at<uchar>(row, col)) > std::numeric_limits<float>::epsilon())) << n;
+			}
+		}
+	}
+	imshow("ELBP Result", elbpImage);
+	return;
+}
+```
+
+### 11积分图计算
+
+#### 1积分图像计算介绍
+
+![1556765115797](OpenCV笔记.assets/1556765115797.png)
+
+
+
+![1556765138105](OpenCV笔记.assets/1556765138105.png)
+
+
+
+#### 2相关API
+
+![1556765222241](OpenCV笔记.assets/1556765222241.png)
+
+```c++
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+using namespace cv;
+
+int main(int argc, char** argv) {
+	Mat src = imread("D:/vcprojects/images/test.png", IMREAD_GRAYSCALE);
+	if (src.empty()) {
+		printf("could not load image...\n");
+		return -1;
+	}
+	namedWindow("input image", CV_WINDOW_AUTOSIZE);
+	imshow("input image", src);
+
+	Mat sumii = Mat::zeros(src.rows + 1, src.cols + 1, CV_32FC1);
+	Mat sqsumii = Mat::zeros(src.rows + 1, src.cols + 1, CV_64FC1);
+	integral(src, sumii, sqsumii);
+
+	Mat iiResult;
+	normalize(sumii, iiResult, 0, 255, NORM_MINMAX, CV_8UC1, Mat());
+	imshow("Integral Image", iiResult);
+
+	waitKey(0);
+	return 0;
+}
+```
+
+### 12Haar特征
+
+#### 1Haar特征介绍（Haar Like Features）
+
+高类间变异性
+低类内变异性
+局部强度差
+不同尺度
+计算效率高
+
+![1556775209806](OpenCV笔记.assets/1556775209806.png)
+
+##### ![1556775239806](OpenCV笔记.assets/1556775239806.png)多尺度
+
+2x2、4x4、8x8、16x16、24x24等
+
+![1556775624302](OpenCV笔记.assets/1556775624302.png)
+
+##### 归一化
+
+![1556775342841](OpenCV笔记.assets/1556775342841.png)
+
+#### 2Haar特征检测
+
+![1556775391837](OpenCV笔记.assets/1556775391837.png)
+
+
+
+
+
 
 
 
